@@ -22,54 +22,8 @@ class Chef::Recipe
   include Chef::RubyBuild::RecipeHelpers
 end
 
-git_url = node['ruby_build']['git_url']
-git_ref = node['ruby_build']['git_ref']
 upgrade_strategy = build_upgrade_strategy(node['ruby_build']['upgrade'])
 
-cache_path  = Chef::Config['file_cache_path']
-src_path    = "#{cache_path}/ruby-build"
-
-include_recipe 'yum-epel' if platform_family?('rhel')
-
-# use multipackage when available as it is much faster
-if platform_family?('rhel', 'suse', 'debian', 'fedora')
-  package node['ruby_build']['install_pkgs']
-
-  package node['ruby_build']['install_git_pkgs'] do
-    not_if 'git --version >/dev/null'
-  end
-else
-  Array(node['ruby_build']['install_pkgs']).each do |pkg|
-    package pkg
-  end
-
-  Array(node['ruby_build']['install_git_pkgs']).each do |pkg|
-    package pkg do
-      not_if 'git --version >/dev/null'
-    end
-  end
-end
-
-execute 'Install ruby-build' do
-  cwd       src_path
-  command   %(./install.sh)
-  action    :nothing
-  not_if    { ::File.exist?('/usr/local/bin/ruby-build') && upgrade_strategy == 'none' }
-end
-
-directory ::File.dirname(src_path) do
-  recursive true
-end
-
-git src_path do
-  repository  git_url
-  reference   git_ref
-
-  if upgrade_strategy == 'none'
-    action    :checkout
-  else
-    action    :sync
-  end
-
-  notifies :run, 'execute[Install ruby-build]', :immediately
+package 'ruby-build' do
+  action upgrade_strategy == 'none' ? :install : :upgrade
 end
